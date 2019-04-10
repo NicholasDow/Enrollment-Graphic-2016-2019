@@ -1,0 +1,181 @@
+---
+title: "Graphic"
+author: "Nicholas Dow"
+date: "April 6, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# For Graph Colors
+
+library(RColorBrewer)
+
+# dplyr for general data manipulation
+
+library(dplyr)
+
+# ggplot2 for visualization of data
+
+library(ggplot2)
+
+# janitor to clean up data from xlxs file
+
+library(janitor)
+
+# readxl to read in xlsx files
+
+library(readxl)
+
+# stringr to filter or modify strings in tibble
+
+library(stringr)
+
+# We get themes for our graphic 
+
+library(ggthemes)
+
+
+
+
+# We are going to create data for 2018 spring classes, we start by reading in the 
+# data and cleaning names
+
+harvard_enrollment_f18 <- read_excel("class_enrollment_03.06.18.xlsx", skip=2) %>% 
+  clean_names() %>% 
+  
+  # We filter out courses that are not well doccumented
+  
+  filter(!is.na(course_section_code)) %>% 
+  
+  # We sum up the total number of occurences of a title, certain classes have multiple 
+  # seperate courses, we are looking for the overall number
+  
+  group_by(course_title) %>% 
+  mutate(total = sum(total)) %>% 
+  
+  # We have only put the total onto the end of each row of the same type, we eliminate 
+  # courses of the same everything to make the data more useable/readable
+  
+  distinct(course_title, course_department, total) %>% 
+  
+  # Put year on so it can be identified in row_bind table
+  
+  mutate(year =2018)
+
+# We are going to create data for 2017 spring classes, we start by reading in the 
+# data and cleaning names
+
+harvard_enrollment_f17 <- read_excel("class_enrollment_03.07.17.xlsx", skip=2) %>%
+  clean_names() %>% 
+
+  # We filter out courses that are not well doccumented
+  
+  filter(!is.na(course_section_code)) %>% 
+  
+  # We sum up the total number of occurences of a title, certain classes have multiple
+  # seperate courses, we are looking for the overall number
+  
+  group_by(course_title) %>% 
+  mutate(total = sum(total)) %>% 
+  
+  # We have only put the total onto the end of each row of the same type, we eliminate 
+  # courses of the same everything to make the data more useable/readable
+  
+  distinct(course_title, course_department, total) %>% 
+  
+  # Put year on so it can be identified in row_bind table
+  
+  mutate(year =2017)
+
+# We are doing the same thing as above, we are reading in the data for a table. For the sake of
+# readability, I am not adding interspaced comments to this one so that you don't have to deal with
+# the white space that makes it kind of hard to read through it. Basically this will prepare a xlsx
+# file's data to be bound to the data from other years by the appending of years and the summation of
+# class totals for courses
+
+harvard_enrollment_s19 <- read_excel("class_enrollment_03.22.19.xlsx", skip=3) %>%
+  clean_names() %>% 
+  filter(!is.na(course_section_code)) %>% 
+  group_by(course_title) %>%
+  mutate(total = sum(total)) %>%
+  distinct(course_title, course_department, total) %>%
+  mutate(year = 2019)
+
+# We are reading in harvard enrollment data from 2016, but this one is in a different format, 
+# we clean the names
+harvard_enrollment_s16 <- read_excel("class_enrollment_03.22.16.xlsx") %>% 
+  clean_names() %>% 
+  
+  # We rename the cols so they are in line with the other tables
+  
+  transmute(course_title = course, course_department = department, total = total_enrollment) %>% 
+  
+  # We sum up the course totals
+  
+  group_by(course_title) %>%
+  mutate(total = sum(total)) %>%
+  distinct(course_title, course_department, total) %>%
+  
+  # We append the year to the end of the tibble to diff it
+  
+  mutate(year = 2016) %>% 
+  
+  # there are extra spaces in the names, we use str_squish to get rid of them
+  
+  ungroup %>% 
+  mutate(course_title = str_squish(course_title))
+
+
+  
+# We are making a mega table with all the classes that fit our interests
+
+harvard_enrollment <- bind_rows(harvard_enrollment_f18, harvard_enrollment_s19, harvard_enrollment_f17, harvard_enrollment_s16) %>% 
+  
+  # We are counting the occurences and filtering by 4 so that we only get classes that occur 4 times
+  # in the last 4 years
+  
+  add_count(course_title) %>% 
+  filter(n == 4) %>% 
+  select(-n) %>% 
+  
+  # We find any classes where the total has been greater than 60, this allows us to see big change
+  
+  group_by(course_title) %>% 
+  filter(any(total >= 60))
+
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+# We set our themes to the wall stree journal
+theme_set(theme_fivethirtyeight())
+
+harvard_enrollment %>% 
+  
+  # We filter the data we need
+  
+  filter(course_department == "Economics" | course_department == "ECON") %>% 
+  
+  # We put the data into a graphic, point and line
+  ggplot(aes(x = year, y = total, color = course_title)) + 
+  geom_point() +
+  geom_line() +
+  
+  # We set the color pallet according to color brew
+  
+  scale_fill_brewer(palette="Set1") +
+  
+  # Scale log because classes get pretty big
+  
+  scale_y_log10() +
+  
+  # We relabel everything in the graph 
+  
+  labs(title = "Spring Econ Courses from 2016 to 2019", subtitle = "ECON 1818 and ECON 1050 Enrollment Plumetted in 2019",caption = "Source: Harvard Registars Office") +
+  xlab("Year (Spring)") +
+  ylab("Total Number of Students") +
+  scale_color_discrete(name = "Course Names")
+  
+
+```
+
+
